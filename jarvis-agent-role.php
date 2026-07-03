@@ -3,7 +3,7 @@
  * Plugin Name:       Jarvis Agent Role
  * Plugin URI:        https://github.com/code-atlantic/jarvis-agent-role
  * Description:        Defines a dedicated, version-controlled "Jarvis" role for the AI agent user. Capabilities are the single source of truth below; bump JARVIS_ROLE_VERSION to re-sync after editing them.
- * Version:           1.5.0
+ * Version:           1.5.1
  * Author:            Code Atlantic
  * Author URI:        https://code-atlantic.com
  * License:           GPL-2.0-or-later
@@ -30,7 +30,7 @@ defined( 'ABSPATH' ) || exit;
  * on the next admin load when this value differs from the saved one. This is the
  * mechanism that makes add_role()'s "already exists, do nothing" behavior moot.
  */
-const ROLE_VERSION = '1.5.0';
+const ROLE_VERSION = '1.5.1';
 
 /** Machine name of the role. Keep stable — changing it orphans the old role. */
 const ROLE_SLUG = 'jarvis_agent';
@@ -189,15 +189,28 @@ function derive_cpt_capabilities(): array {
 
 	$primitives = [ 'edit_posts', 'edit_others_posts', 'edit_published_posts', 'publish_posts' ];
 
+	// WordPress sentinel caps that must never be granted to a role. A read-only
+	// CPT maps its edit primitives to `do_not_allow` (e.g. the Jarvis activity-log
+	// CPT jp_act_log_event); `exist` is the internal "post exists" pseudo-cap.
+	// Granting `do_not_allow` poisons map_meta_cap() for existing objects — every
+	// edit_post check against a real post then fails "Required capability:
+	// edit_post" even though the true edit caps are present.
+	$sentinels = [ 'do_not_allow', 'exist' ];
+
 	foreach ( $types as $type ) {
 		$object = get_post_type_object( $type );
 		if ( ! $object || ! isset( $object->cap ) ) {
 			continue;
 		}
 		foreach ( $primitives as $primitive ) {
-			if ( isset( $object->cap->$primitive ) ) {
-				$caps[ $object->cap->$primitive ] = true;
+			if ( ! isset( $object->cap->$primitive ) ) {
+				continue;
 			}
+			$mapped = $object->cap->$primitive;
+			if ( in_array( $mapped, $sentinels, true ) ) {
+				continue;
+			}
+			$caps[ $mapped ] = true;
 		}
 	}
 
