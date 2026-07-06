@@ -3,7 +3,7 @@
  * Plugin Name:       Jarvis Agent Role
  * Plugin URI:        https://github.com/code-atlantic/jarvis-agent-role
  * Description:        Defines a dedicated, version-controlled "Jarvis" role for the AI agent user. Capabilities are the single source of truth below; bump JARVIS_ROLE_VERSION to re-sync after editing them.
- * Version:           1.5.1
+ * Version:           1.6.0
  * Author:            Code Atlantic
  * Author URI:        https://code-atlantic.com
  * License:           GPL-2.0-or-later
@@ -408,6 +408,9 @@ function on_deactivate(): void {
 
 // Minimal audit trail for actions taken by the Jarvis user.
 require_once __DIR__ . '/includes/audit-log.php';
+
+// Optional read-only SQL ability (jarvis-agent-only, off unless JARVIS_ENABLE_SQL).
+require_once __DIR__ . '/includes/sql-ability.php';
 
 /**
  * Activation: register the role, then ensure the agent user exists on it.
