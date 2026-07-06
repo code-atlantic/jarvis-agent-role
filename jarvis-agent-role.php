@@ -3,7 +3,7 @@
  * Plugin Name:       Jarvis Agent Role
  * Plugin URI:        https://github.com/code-atlantic/jarvis-agent-role
  * Description:        Defines a dedicated, version-controlled "Jarvis" role for the AI agent user. Capabilities are the single source of truth below; bump JARVIS_ROLE_VERSION to re-sync after editing them.
- * Version:           1.6.0
+ * Version:           1.6.1
  * Author:            Code Atlantic
  * Author URI:        https://code-atlantic.com
  * License:           GPL-2.0-or-later

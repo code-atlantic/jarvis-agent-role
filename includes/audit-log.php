@@ -12,8 +12,13 @@
  * Auth events (cookie login, application-password) don't run through an ability,
  * so they're captured separately.
  *
- * Logging only fires for users on the `jarvis_agent` role, so human admins and
- * non-agent API clients generate nothing.
+ * WP-CLI commands are captured too, but UNCONDITIONALLY (not gated on the jarvis
+ * role) — every `wp` command is privileged shell access worth auditing, and it
+ * usually runs with no `--user`, so there's no jarvis actor to gate on. This is
+ * the site-side trail for maintenance done over SSH.
+ *
+ * Ability + auth logging only fires for users on the `jarvis_agent` role, so human
+ * admins and non-agent API clients generate nothing there.
  *
  * Storage: JSON-lines file, one event per line. Defaults ABOVE the web root when
  * that location is writable (so the trail isn't web-reachable), else wp-content.
@@ -226,6 +231,93 @@ add_action(
 	10,
 	2
 );
+
+/* -------------------------------------------------------------------------
+ * WP-CLI command capture.
+ *
+ * Every `wp` command run against this site is privileged shell access, so it's
+ * logged UNCONDITIONALLY — NOT gated on the jarvis WP role. Rationale: operators
+ * (and the agent) usually run `wp @site …` with no `--user=jarvis`, so from the
+ * site's perspective there's no jarvis actor; but the *channel* (someone with
+ * shell + wp-cli) is exactly what needs auditing. This is the site-side trail
+ * that catches maintenance done over SSH that never touches an ability or REST.
+ *
+ * Uses `before_invoke:` (fires just before a command runs, with the full command
+ * resolved) and captures the runtime + exit via a shutdown record on `after_invoke:`.
+ * We log the command, subcommand, args, the resolved --user (if any), and the OS
+ * user/host so the trail ties back to who was on the box.
+ * ---------------------------------------------------------------------- */
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+
+	/**
+	 * Log a wp-cli invocation. Bypasses actor_is_jarvis() on purpose — see above.
+	 *
+	 * @param string               $phase      Event phase label (e.g. 'run').
+	 * @param array<int,string>    $args       Positional command args from the hook.
+	 * @param array<string,mixed>  $assoc_args Associative --flags from the hook.
+	 */
+	$jarvis_cli_logger = function ( string $phase, array $args = [], array $assoc_args = [] ) {
+		// Prefer the hook-provided args; fall back to raw argv if empty.
+		if ( ! empty( $args ) ) {
+			$parts = $args;
+			foreach ( $assoc_args as $k => $v ) {
+				$parts[] = ( true === $v ) ? "--$k" : "--$k=$v";
+			}
+		} else {
+			$parts = array_slice( (array) ( $GLOBALS['argv'] ?? [] ), 1 );
+		}
+
+		// Resolve --user if the caller passed one (who the command RAN AS in WP).
+		$run_as = '';
+		try {
+			$runner = method_exists( '\WP_CLI', 'get_runner' ) ? \WP_CLI::get_runner() : null;
+			if ( $runner && ! empty( $runner->config['user'] ) ) {
+				$run_as = (string) $runner->config['user'];
+			}
+		} catch ( \Throwable $e ) {
+			$run_as = '';
+		}
+
+		$command = implode( ' ', array_map( 'strval', $parts ) );
+
+		// Scrub secret-shaped values out of the command STRING itself, e.g.
+		// `wp config set SOME_SECRET abc123` or `wp user create x --user_pass=hunter2`.
+		// Redact the token following a secret-ish flag/word.
+		$command = preg_replace(
+			'/(\b\S*(?:password|secret|token|api[_-]?key|private[_-]?key)\S*\b[=\s]+)(\S+)/i',
+			'$1«redacted»',
+			$command
+		);
+
+		$entry = [
+			'time'     => gmdate( 'c' ),
+			'action'   => 'wpcli.' . $phase,
+			// OS-level identity of who ran the command (ties to SSH access).
+			'os_user'  => function_exists( 'posix_getpwuid' ) && function_exists( 'posix_geteuid' )
+				? ( posix_getpwuid( posix_geteuid() )['name'] ?? get_current_user() )
+				: get_current_user(),
+			'ssh_from' => isset( $_SERVER['SSH_CLIENT'] )
+				? sanitize_text_field( wp_unslash( $_SERVER['SSH_CLIENT'] ) )
+				: ( (string) ( getenv( 'SSH_CLIENT' ) ?: '' ) ),
+			'run_as'   => $run_as, // WP --user, if any.
+			'cwd'      => getcwd() ?: '',
+			'command'  => clip( $command ),
+		];
+
+		write_line( wp_json_encode( $entry ) );
+	};
+
+	// `before_run_command` is WP-CLI's GLOBAL pre-command hook — fires before
+	// every command with ( $args, $assoc_args, $options ). (`before_invoke`
+	// requires a per-command suffix and won't fire globally.) We log here; that's
+	// the one guaranteed-to-fire point for every invocation.
+	\WP_CLI::add_hook(
+		'before_run_command',
+		function ( $args = [], $assoc_args = [], $options = [] ) use ( $jarvis_cli_logger ) {
+			$jarvis_cli_logger( 'run', $args, $assoc_args );
+		}
+	);
+}
 
 /* -------------------------------------------------------------------------
  * WP-CLI: `wp jarvis audit [--lines=N]` to tail the trail.
