@@ -179,7 +179,7 @@ function sql_execute( $input ) {
  * Register the `jarvis` ability category. WP 6.9's Abilities API REQUIRES every
  * ability to declare a `category`, and that category must be registered first
  * (on the dedicated `wp_abilities_api_categories_init` action) or the ability
- * is silently rejected. Mirrors how gk-block-mcp registers its category.
+ * is silently rejected.
  */
 function register_jarvis_category(): void {
 	if ( ! function_exists( 'wp_register_ability_category' ) ) {

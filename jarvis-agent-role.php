@@ -3,7 +3,7 @@
  * Plugin Name:       Jarvis Agent Role
  * Plugin URI:        https://github.com/code-atlantic/jarvis-agent-role
  * Description:        Defines a dedicated, version-controlled "Jarvis" role for the AI agent user. Capabilities are the single source of truth below; bump JARVIS_ROLE_VERSION to re-sync after editing them.
- * Version:           1.6.1
+ * Version:           1.6.2
  * Author:            Code Atlantic
  * Author URI:        https://code-atlantic.com
  * License:           GPL-2.0-or-later
@@ -12,9 +12,9 @@
  * GitHub Plugin URI: code-atlantic/jarvis-agent-role
  * Primary Branch:    main
  *
- * Updates are delivered via Git Updater from the private GitHub repo above. Git
- * Updater must be installed and authenticated with a GitHub token that can read
- * the code-atlantic org (the same token already used for webmcp-abilities et al).
+ * Updates are delivered via Git Updater from the GitHub repo above — install
+ * Git Updater on the site and new tagged releases show up as ordinary plugin
+ * updates.
  *
  * Deployment: drop this folder into wp-content/plugins/ on each site and activate
  * when provisioning the Jarvis user + application password. The role re-syncs
