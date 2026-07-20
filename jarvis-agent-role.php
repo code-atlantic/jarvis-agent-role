@@ -3,7 +3,7 @@
  * Plugin Name:       Jarvis Agent Role
  * Plugin URI:        https://github.com/code-atlantic/jarvis-agent-role
  * Description:        Defines a dedicated, version-controlled "Jarvis" role for the AI agent user. Capabilities are the single source of truth below; bump JARVIS_ROLE_VERSION to re-sync after editing them.
- * Version:           1.6.2
+ * Version:           1.6.3
  * Author:            Code Atlantic
  * Author URI:        https://code-atlantic.com
  * License:           GPL-2.0-or-later
@@ -41,7 +41,18 @@ const ROLE_NAME = 'Jarvis (AI Agent)';
 /** Option key tracking which ROLE_VERSION is currently materialized in the DB. */
 const VERSION_OPTION = 'jarvis_role_synced_version';
 
-/** Login + email for the provisioned agent user. Override via the filters below. */
+/**
+ * Default login + email for the provisioned agent user.
+ *
+ * These are the fallbacks. Per site, prefer constants in wp-config.php —
+ * JARVIS_USER_LOGIN / JARVIS_USER_EMAIL / JARVIS_USER_BIO — which keeps your real
+ * identity out of the plugin (and out of version control) entirely. The matching
+ * filters still win over constants for programmatic cases. See identity().
+ *
+ * The email defaults to an RFC 2606 reserved example address on purpose: it can
+ * never be registered by anyone. The account never logs in interactively (auth is
+ * via application password), so the address is only used for WP's own bookkeeping.
+ */
 const USER_LOGIN = 'jarvis';
 const USER_EMAIL = 'jarvis@example.com';
 
@@ -53,7 +64,7 @@ const USER_DISPLAY_NAME = 'Jarvis (AI Agent)';
  * (author archives, comment author links), so it's written to read in-character
  * yet professional. Override per-site via the `jarvis_user_bio` filter.
  */
-const USER_BIO = 'Jarvis is the AI agent for Code Atlantic, working alongside the team behind Popup Maker. He handles content updates, site maintenance, and the operational work that keeps wppopupmaker.com running — precisely, and without being asked twice. Every action he takes is logged and scoped to a deliberately limited set of permissions.';
+const USER_BIO = 'Jarvis is the AI agent for this site. It handles content updates, site maintenance, and routine operational work. Every action it takes is logged, and its permissions are deliberately limited — it cannot install or edit code, or manage user accounts.';
 
 /** User-meta flag marking an account as one we created — gates re-runs and uninstall. */
 const USER_FLAG_META = '_jarvis_agent_user';
@@ -291,14 +302,46 @@ function sync_role(): void {
  * @return int|\WP_Error Agent user ID, or WP_Error when a non-agent account
  *                       already owns the login/email.
  */
-/** The agent's bio (Biographical Info), filterable per-site. */
+/**
+ * Resolve one identity value: constant (wp-config.php) beats the bundled default,
+ * and the filter beats both.
+ *
+ * Defining JARVIS_USER_EMAIL et al. in wp-config.php is the recommended way to run
+ * this plugin unmodified while keeping your real agent identity out of the codebase.
+ *
+ * @param string $key      One of 'login', 'email', 'bio'.
+ * @param string $fallback Bundled default.
+ */
+function identity( string $key, string $fallback ): string {
+	$constant = 'JARVIS_USER_' . strtoupper( $key );
+	$value    = defined( $constant ) ? (string) constant( $constant ) : $fallback;
+
+	/**
+	 * Filter an agent identity value. Runs after the constant, so it wins.
+	 *
+	 * @param string $value Resolved value (constant if defined, else the default).
+	 */
+	return (string) apply_filters( "jarvis_user_{$key}", $value );
+}
+
+/** The agent's login. Constant: JARVIS_USER_LOGIN. Filter: jarvis_user_login. */
+function login(): string {
+	return identity( 'login', USER_LOGIN );
+}
+
+/** The agent's email. Constant: JARVIS_USER_EMAIL. Filter: jarvis_user_email. */
+function email(): string {
+	return identity( 'email', USER_EMAIL );
+}
+
+/** The agent's bio (Biographical Info). Constant: JARVIS_USER_BIO. */
 function bio(): string {
-	return (string) apply_filters( 'jarvis_user_bio', USER_BIO );
+	return identity( 'bio', USER_BIO );
 }
 
 function ensure_user() {
-	$login = (string) apply_filters( 'jarvis_user_login', USER_LOGIN );
-	$email = (string) apply_filters( 'jarvis_user_email', USER_EMAIL );
+	$login = login();
+	$email = email();
 
 	// Already provisioned by us? Re-assert role and return.
 	$existing = get_users(
@@ -461,7 +504,7 @@ function is_jarvis_avatar_target( $id_or_email ): bool {
 		$email = $user->user_email;
 	}
 
-	$target = (string) apply_filters( 'jarvis_user_email', USER_EMAIL );
+	$target = email();
 	return '' !== $email && strtolower( $email ) === strtolower( $target );
 }
 

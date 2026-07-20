@@ -14,9 +14,10 @@ account for your own AI integration.
 - **`jarvis_agent` role, defined in code.** The capability list in
   `jarvis-agent-role.php` is the single source of truth. Bump `ROLE_VERSION` and the stored
   role rebuilds on the next admin load — no deactivate/reactivate dance.
-- **A provisioned agent user.** Activation creates a `jarvis` user
-  (`jarvis@example.com`, filterable) on the role, with display name, bio, and a
-  bundled avatar served locally everywhere WordPress renders one — no Gravatar dependency.
+- **A provisioned agent user.** Activation creates a `jarvis` user on the role, with
+  display name, bio, and a bundled avatar served locally everywhere WordPress renders
+  one — no Gravatar dependency. Login, email, and bio are all filterable (see
+  [Configuration](#configuration-reference)); set a real email for your site.
 - **An audit log** of every Abilities-API tool call, auth event, and WP-CLI command,
   written as JSON lines to a file outside the web root.
 - **An optional read-only SQL ability** (`jarvis/execute-sql`) for ad-hoc reporting,
@@ -72,6 +73,34 @@ if your stack differs.
 
 `wp jarvis user` re-runs the provisioning check on demand (and prints the app-password
 command).
+
+### Set your own agent identity
+
+The defaults are deliberately generic: login `jarvis`, email `jarvis@example.com`
+(RFC 2606 reserved — it can never be registered), and a neutral bio. Set your own in
+`wp-config.php` — this is the recommended approach, and it keeps your real agent
+identity out of the plugin and out of version control:
+
+```php
+// wp-config.php
+define( 'JARVIS_USER_LOGIN', 'friday' );
+define( 'JARVIS_USER_EMAIL', 'agent@yourcompany.com' );
+define( 'JARVIS_USER_BIO',   'Our AI agent. Scoped permissions, fully logged.' );
+```
+
+Equivalent filters (`jarvis_user_login`, `jarvis_user_email`, `jarvis_user_bio`) are
+available for programmatic cases and **take precedence over the constants**.
+
+Set these **before** first activation so the user is created with them. If the account
+already exists, run `wp jarvis user` to re-assert display name, nickname, and bio.
+Changing the *login* after creation does not rename the existing account — provisioning
+then looks for a different user and will refuse to adopt one that isn't unambiguously
+the agent (see below); rename the account in WordPress instead.
+
+> The agent account never logs in interactively — it's created with an unused random
+> password and authenticates via application password — so a predictable login is not
+> itself a weakness. The security boundary is the capability ceiling and the revocable
+> credential, not the username.
 
 ### Safety: account adoption rules
 
@@ -149,8 +178,8 @@ When disabled (the default) the ability isn't even registered.
 | Hook / constant | Purpose |
 | --- | --- |
 | `jarvis_role_capabilities` (filter) | Add/drop caps per site without forking — e.g. revoke `manage_options` on a hardened install. |
-| `jarvis_user_login` / `jarvis_user_email` (filters) | Change the agent account identity. |
-| `jarvis_user_bio` (filter) | Override the agent's Biographical Info. |
+| `JARVIS_USER_LOGIN` / `JARVIS_USER_EMAIL` / `JARVIS_USER_BIO` (constants) | Agent account identity. Recommended — set in `wp-config.php`. |
+| `jarvis_user_login` / `jarvis_user_email` / `jarvis_user_bio` (filters) | Same values, programmatically. Take precedence over the constants. |
 | `jarvis_enable_sql` (filter) / `JARVIS_ENABLE_SQL` (constant) | Enable the SQL ability. |
 | `JARVIS_AUDIT_LOG_FILE` (constant) | Explicit audit-log path. |
 
